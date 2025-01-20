@@ -18,7 +18,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/prometheus/prometheus/model/relabel"
 
-	"github.com/open-telemetry/opentelemetry-operator/cmd/otel-allocator/target"
+	"github.com/open-telemetry/opentelemetry-operator/cmd/otel-allocator/internal/target"
 )
 
 type RelabelConfigTargetFilter struct {
