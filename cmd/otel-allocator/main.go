@@ -12,8 +12,11 @@ import (
 
 	"github.com/oklog/run"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/prometheus/discovery"
+	"go.opentelemetry.io/otel/attribute"
+	otelprom "go.opentelemetry.io/otel/exporters/prometheus"
+	"go.opentelemetry.io/otel/metric"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -27,11 +30,7 @@ import (
 )
 
 var (
-	setupLog     = ctrl.Log.WithName("setup")
-	eventsMetric = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "opentelemetry_allocator_events",
-		Help: "Number of events in the channel.",
-	}, []string{"source"})
+	setupLog = ctrl.Log.WithName("setup")
 )
 
 func main() {
@@ -68,8 +67,15 @@ func main() {
 	ctx := context.Background()
 	log := ctrl.Log.WithName("allocator")
 
+	metricExporter, err := otelprom.New()
+	if err != nil {
+		panic(err)
+	}
+	meterProvider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(metricExporter))
+	meter := meterProvider.Meter("otelallocator")
+
 	allocatorPrehook = prehook.New(cfg.FilterStrategy, log)
-	allocator, err = allocation.New(cfg.AllocationStrategy, log, allocation.WithFilter(allocatorPrehook), allocation.WithFallbackStrategy(cfg.AllocationFallbackStrategy))
+	allocator, err = allocation.New(cfg.AllocationStrategy, meter, log, allocation.WithFilter(allocatorPrehook), allocation.WithFallbackStrategy(cfg.AllocationFallbackStrategy))
 	if err != nil {
 		setupLog.Error(err, "Unable to initialize allocation strategy")
 		os.Exit(1)
@@ -84,7 +90,10 @@ func main() {
 		}
 		httpOptions = append(httpOptions, server.WithTLSConfig(tlsConfig, cfg.HTTPS.ListenAddr))
 	}
-	srv := server.NewServer(log, allocator, cfg.ListenAddr, httpOptions...)
+	srv, err := server.NewServer(log, meter, allocator, cfg.ListenAddr, httpOptions...)
+	if err != nil {
+		panic(err)
+	}
 
 	discoveryCtx, discoveryCancel := context.WithCancel(ctx)
 	sdMetrics, err := discovery.CreateAndRegisterSDMetrics(prometheus.DefaultRegisterer)
@@ -94,8 +103,11 @@ func main() {
 	}
 	discoveryManager = discovery.NewManager(discoveryCtx, config.NopLogger, prometheus.DefaultRegisterer, sdMetrics)
 
-	targetDiscoverer = target.NewDiscoverer(log, discoveryManager, allocatorPrehook, srv, allocator.SetTargets)
-	collectorWatcher, collectorWatcherErr := collector.NewCollectorWatcher(log, cfg.ClusterConfig, cfg.CollectorNotReadyGracePeriod)
+	targetDiscoverer, err = target.NewDiscoverer(log, meter, discoveryManager, allocatorPrehook, srv, allocator.SetTargets)
+	if err != nil {
+		panic(err)
+	}
+	collectorWatcher, collectorWatcherErr := collector.NewCollectorWatcher(log, meter, cfg.ClusterConfig, cfg.CollectorNotReadyGracePeriod)
 	if collectorWatcherErr != nil {
 		setupLog.Error(collectorWatcherErr, "Unable to initialize collector watcher")
 		os.Exit(1)
@@ -201,12 +213,16 @@ func main() {
 				}
 			})
 	}
+	eventsMetric, err := meter.Int64Counter("opentelemetry_allocator_events", metric.WithDescription("Number of events in the channel."))
+	if err != nil {
+		panic(err)
+	}
 	runGroup.Add(
 		func() error {
 			for {
 				select {
 				case event := <-eventChan:
-					eventsMetric.WithLabelValues(event.Source.String()).Inc()
+					eventsMetric.Add(context.Background(), 1, metric.WithAttributes(attribute.String("source", event.Source.String())))
 					loadConfig, err := event.Watcher.LoadConfig(ctx)
 					if err != nil {
 						setupLog.Error(err, "Unable to load configuration")

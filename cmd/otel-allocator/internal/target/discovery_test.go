@@ -62,7 +62,7 @@ func TestDiscovery(t *testing.T) {
 	require.NoError(t, err)
 	d := discovery.NewManager(ctx, config.NopLogger, registry, sdMetrics)
 	results := make(chan []string)
-	manager := NewDiscoverer(ctrl.Log.WithName("test"), d, nil, scu, func(targets []*Item) {
+	manager := NewDiscoverer(ctrl.Log.WithName("test"), nil, d, nil, scu, func(targets []*Item) {
 		var result []string
 		for _, t := range targets {
 			result = append(result, t.TargetURL)
@@ -309,7 +309,7 @@ func TestDiscovery_ScrapeConfigHashing(t *testing.T) {
 	sdMetrics, err := discovery.CreateAndRegisterSDMetrics(registry)
 	require.NoError(t, err)
 	d := discovery.NewManager(ctx, config.NopLogger, registry, sdMetrics)
-	manager := NewDiscoverer(ctrl.Log.WithName("test"), d, nil, scu, nil)
+	manager := NewDiscoverer(ctrl.Log.WithName("test"), nil, d, nil, scu, nil)
 
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
@@ -348,7 +348,7 @@ func TestDiscovery_NoConfig(t *testing.T) {
 	sdMetrics, err := discovery.CreateAndRegisterSDMetrics(registry)
 	require.NoError(t, err)
 	d := discovery.NewManager(ctx, config.NopLogger, registry, sdMetrics)
-	manager := NewDiscoverer(ctrl.Log.WithName("test"), d, nil, scu, nil)
+	manager := NewDiscoverer(ctrl.Log.WithName("test"), nil, d, nil, scu, nil)
 	defer close(manager.close)
 	defer cancelFunc()
 
@@ -398,7 +398,7 @@ func BenchmarkApplyScrapeConfig(b *testing.B) {
 	sdMetrics, err := discovery.CreateAndRegisterSDMetrics(registry)
 	require.NoError(b, err)
 	d := discovery.NewManager(ctx, config.NopLogger, registry, sdMetrics)
-	manager := NewDiscoverer(ctrl.Log.WithName("test"), d, nil, scu, nil)
+	manager := NewDiscoverer(ctrl.Log.WithName("test"), nil, d, nil, scu, nil)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

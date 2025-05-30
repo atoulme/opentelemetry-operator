@@ -174,7 +174,7 @@ func createTestDiscoverer(allocationStrategy string, prehookConfig map[string][]
 	allocatorPrehook := prehook.New("relabel-config", logger)
 	allocatorPrehook.SetConfig(prehookConfig)
 	allocator, err := allocation.New(allocationStrategy, logger, allocation.WithFilter(allocatorPrehook))
-	srv := server.NewServer(logger, allocator, "localhost:0")
+	srv := server.NewServer(logger, nil, allocator, "localhost:0")
 	if err != nil {
 		setupLog.Error(err, "Unable to initialize allocation strategy")
 		os.Exit(1)
@@ -182,6 +182,6 @@ func createTestDiscoverer(allocationStrategy string, prehookConfig map[string][]
 	registry := prometheus.NewRegistry()
 	sdMetrics, _ := discovery.CreateAndRegisterSDMetrics(registry)
 	discoveryManager := discovery.NewManager(ctx, config.NopLogger, registry, sdMetrics)
-	targetDiscoverer := target.NewDiscoverer(logger, discoveryManager, allocatorPrehook, srv, allocator.SetTargets)
+	targetDiscoverer := target.NewDiscoverer(logger, nil, discoveryManager, allocatorPrehook, srv, allocator.SetTargets)
 	return targetDiscoverer
 }
