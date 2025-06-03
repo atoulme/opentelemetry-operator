@@ -403,11 +403,12 @@ func TestDiscoveryTargetHashing(t *testing.T) {
 	require.NoError(t, err)
 	d := discovery.NewManager(ctx, config.NopLogger, registry, sdMetrics)
 	results := make(chan []*Item)
-	manager := NewDiscoverer(ctrl.Log.WithName("test"), d, nil, scu, func(targets []*Item) {
+	manager, err := NewDiscoverer(ctrl.Log.WithName("test"), d, nil, scu, func(targets []*Item) {
 		var result []*Item
 		result = append(result, targets...)
 		results <- result
 	})
+	require.NoError(t, err)
 
 	defer manager.Close()
 	defer cancelFunc()
